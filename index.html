@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WeatherIQ - Login</title>
+    <style>
+      /* ===== THEME VARIABLES ===== */
+      :root {
+        --accent: #3a7bd5;
+        --accent-dark: #7fd3ff;
+        --text-light: #1e293b;
+        --text-dark: #e4f1ff;
+        --muted-light: #64748b;
+        --muted-dark: #9fb7c9;
+        --btn-gradient: linear-gradient(90deg, #4b6cf0, #3855d6);
+        --btn-gradient-dark: linear-gradient(90deg, #6ad1ff, #4a8bff);
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Inter", Arial, Helvetica, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        transition: background 0.6s ease, color 0.6s ease;
+        overflow: hidden;
+      }
+
+      /* ===== Background Image Layer ===== */
+      body.light {
+        background: url("https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=80")
+          center/cover no-repeat fixed;
+        color: var(--text-light);
+      }
+      body.dark {
+        background: url("https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=1920&q=80")
+          center/cover no-repeat fixed;
+        color: var(--text-dark);
+      }
+
+      /* Dim/Blur overlay for better contrast */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        backdrop-filter: blur(12px);
+        background: rgba(0, 0, 0, 0.25);
+        z-index: 0;
+        transition: background 0.5s ease;
+      }
+      body.light .overlay {
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      /* ===== Layout ===== */
+      .page {
+        position: relative;
+        z-index: 1;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      /* ===== Card ===== */
+      .container {
+        width: 380px;
+        max-width: 92vw;
+        border-radius: 18px;
+        padding: 40px 32px;
+        text-align: center;
+        backdrop-filter: blur(16px);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.15);
+        transition: all 0.6s ease;
+        box-sizing: border-box;
+      }
+      body.dark .container {
+        background: rgba(30, 40, 60, 0.45);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .logo {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+      body.dark .logo {
+        color: var(--accent-dark);
+      }
+
+      .tagline {
+        color: var(--muted-light);
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+      body.dark .tagline {
+        color: var(--muted-dark);
+      }
+
+      h2 {
+        margin-bottom: 18px;
+        font-weight: 700;
+        font-size: 22px;
+      }
+
+      .form-group {
+        margin-bottom: 16px;
+        text-align: left;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 14px;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        background: rgba(255, 255, 255, 0.5);
+        font-size: 15px;
+        transition: all 0.3s ease;
+        color: #111;
+        box-sizing: border-box;
+      }
+      body.dark input {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--text-dark);
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+      }
+
+      button {
+        width: 100%;
+        padding: 13px;
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        background: var(--btn-gradient);
+        transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.4s;
+        position: relative;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+      body.dark button {
+        background: var(--btn-gradient-dark);
+      }
+      button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -75%;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(
+          120deg,
+          rgba(255, 255, 255, 0.4) 0%,
+          rgba(255, 255, 255, 0) 80%
+        );
+        transform: skewX(-20deg);
+        transition: left 0.45s ease;
+      }
+      button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 15px 35px rgba(67, 97, 238, 0.2);
+      }
+      button:hover::after {
+        left: 130%;
+      }
+
+      .switch-page {
+        margin-top: 14px;
+        font-size: 14px;
+        color: var(--muted-light);
+      }
+      body.dark .switch-page {
+        color: var(--muted-dark);
+      }
+      .switch-page a {
+        color: var(--accent);
+        font-weight: 700;
+        text-decoration: none;
+      }
+      body.dark .switch-page a {
+        color: var(--accent-dark);
+      }
+
+      .result {
+        margin-top: 16px;
+        display: none;
+        padding: 12px;
+        border-radius: 10px;
+      }
+      .success {
+        background: #e8f5e8;
+        border: 1px solid #4bb543;
+        color: #163b19;
+      }
+      .error {
+        background: #fff0f0;
+        border: 1px solid #e71d36;
+        color: #721c24;
+      }
+
+      /* ===== Mode Toggle ===== */
+      .mode-toggle {
+        position: fixed;
+        top: 18px;
+        right: 20px;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 999px;
+        padding: 6px;
+        display: flex;
+        gap: 6px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+      }
+      body.dark .mode-toggle {
+        background: rgba(10, 12, 20, 0.5);
+      }
+
+      .mode-toggle button {
+        border: 0;
+        background: transparent;
+        font-size: 18px;
+        padding: 8px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.3s ease;
+        color: inherit;
+      }
+      .mode-toggle button.active {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 30px 22px;
+        }
+        .page {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+
+  <body class="light">
+    <div class="overlay"></div>
+
+    <div class="mode-toggle" id="modeToggle">
+      <button id="lightBtn">☀️</button>
+      <button id="darkBtn">🌙</button>
+    </div>
+
+    <div class="page">
+      <div class="container">
+        <div class="logo">🌤️ WeatherIQ</div>
+        <div class="tagline">Your smart weather alert companion</div>
+
+        <h2>Login</h2>
+        <div class="form-group">
+          <label for="login-phone">Phone Number</label>
+          <input type="tel" id="login-phone" placeholder="+919876543210" />
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Enter password" />
+        </div>
+
+        <button onclick="loginUser()">Login</button>
+
+        <div class="switch-page">
+          Don't have an account? <a href="signup.html">Sign Up</a>
+        </div>
+
+        <div id="result" class="result"></div>
+        <div id="loading" style="display: none; margin-top: 10px">Logging in...</div>
+      </div>
+    </div>
+
+    <!-- ===== FIXED Backend Logic ===== -->
+    <script>
+      const API_URL =
+        "https://xjusfbs1qa.execute-api.ap-south-1.amazonaws.com/prod/weather";
+
+      function showLoading(show) {
+        document.getElementById("loading").style.display = show
+          ? "block"
+          : "none";
+      }
+
+      function showResult(message, isError = false) {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = message;
+        resultDiv.className = "result " + (isError ? "error" : "success");
+        resultDiv.style.display = "block";
+      }
+
+      function validatePhoneNumber(phone) {
+        const phoneRegex = /^\+[1-9]\d{1,14}$/;
+        return phoneRegex.test(phone);
+      }
+
+      // REMOVED: simpleHash function - Lambda now handles passwords directly
+
+      async function loginUser() {
+        const phone = document.getElementById("login-phone").value.trim();
+        const password = document.getElementById("login-password").value;
+
+        if (!phone || !password) {
+          showResult("Please enter phone number and password", true);
+          return;
+        }
+
+        if (!validatePhoneNumber(phone)) {
+          showResult("Please enter a valid phone number", true);
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "login",
+              phone_number: phone,
+              password: password // Send plain password (no hashing)
+            }),
+          });
+
+          const data = await response.json();
+          console.log("Login response:", data);
+
+          if (response.ok) {
+            let userData;
+            if (data.body) {
+              userData = typeof data.body === "string" ? JSON.parse(data.body) : data.body;
+            } else {
+              userData = data;
+            }
+
+            localStorage.setItem(
+              "currentUser",
+              JSON.stringify({
+                user_id: userData.user_id,
+                phone: phone,
+              })
+            );
+
+            showResult("✅ Login successful! Redirecting...", false);
+            setTimeout(() => {
+              window.location.href = "weather.html";
+            }, 1000);
+          } else {
+            showResult(
+              data.error || "Login failed. Check your credentials.",
+              true
+            );
+          }
+        } catch (error) {
+          showResult("Network error: " + error.message, true);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // ===== Mode Toggle =====
+      const body = document.body;
+      const lightBtn = document.getElementById("lightBtn");
+      const darkBtn = document.getElementById("darkBtn");
+
+      function setMode(mode) {
+        body.className = mode;
+        localStorage.setItem("wg_mode", mode);
+        lightBtn.classList.toggle("active", mode === "light");
+        darkBtn.classList.toggle("active", mode === "dark");
+      }
+
+      lightBtn.addEventListener("click", () => setMode("light"));
+      darkBtn.addEventListener("click", () => setMode("dark"));
+
+      const savedMode = localStorage.getItem("wg_mode") || "light";
+      setMode(savedMode);
+
+      // Allow Enter key to submit form
+      document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('login-password').addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            loginUser();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WeatherGuard - Weather Alerts</title>
+
+    <style>
+      /* ===== Theme variables (consistent with index/signup) ===== */
+      :root {
+        --accent: #4361ee;
+        --accent-dark: #7fd3ff;
+        --text-light: #24323a;
+        --text-dark: #e6f6ff;
+        --muted-light: #677482;
+        --muted-dark: #9fb7c9;
+        --btn-gradient: linear-gradient(90deg, #4b6cf0, #3855d6);
+        --btn-gradient-dark: linear-gradient(90deg, #6ad1ff, #4a8bff);
+        --card-w: 980px;
+        --ui-z: 999;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        transition: background 0.6s ease, color 0.6s ease;
+        overflow-y: auto; /* ✅ scrolling enabled */
+        overflow-x: hidden;
+        scroll-behavior: smooth;
+        background-attachment: fixed;
+      }
+
+      /* Background images for light/dark (same as index/signup) */
+      body.light {
+        background: url("https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=80")
+          center/cover no-repeat fixed;
+        color: var(--text-light);
+      }
+      body.dark {
+        background: url("https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=1920&q=80")
+          center/cover no-repeat fixed;
+        color: var(--text-dark);
+      }
+
+      /* subtle overlay for contrast */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        backdrop-filter: blur(10px);
+        background: rgba(0, 0, 0, 0.22);
+        z-index: 0;
+        transition: background 0.5s ease;
+      }
+      body.light .overlay {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      /* ===== Layout & Card ===== */
+      .page {
+        position: relative;
+        min-height: 100%;
+        z-index: 5;
+        padding: 40px 36px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      .container {
+        width: var(--card-w);
+        max-width: 95vw;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: 14px;
+        padding: 22px 26px;
+        box-shadow: 0 20px 46px rgba(6, 8, 16, 0.45);
+        z-index: 30;
+        box-sizing: border-box;
+        animation: floaty 6s ease-in-out infinite;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        transition: background 0.4s ease, color 0.4s ease;
+        margin-bottom: 60px;
+      }
+      @keyframes floaty {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+
+      body.dark .container {
+        background: rgba(8, 12, 20, 0.48);
+        border-color: rgba(255, 255, 255, 0.06);
+        box-shadow: 0 30px 70px rgba(2, 6, 18, 0.6);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .logo {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .user-info {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: inherit;
+      }
+      .dark .logo {
+        color: var(--accent-dark);
+      }
+      .dark .user-info {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .logout-btn {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .logout-btn:hover {
+        background: #5a6268;
+      }
+
+      .form-group {
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: inherit;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-sizing: border-box;
+        font-size: 15px;
+        background: rgba(255, 255, 255, 0.06);
+        color: inherit;
+      }
+      body.light input,
+      body.light select {
+        background: rgba(255, 255, 255, 0.85);
+        color: var(--text-light);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 12px 28px rgba(67, 97, 238, 0.06);
+      }
+
+      button.primary {
+        width: 100%;
+        padding: 12px;
+        background: var(--btn-gradient);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 12px 30px rgba(56, 85, 214, 0.12);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+      }
+      button.primary::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -75%;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(
+          120deg,
+          rgba(255, 255, 255, 0.45) 0%,
+          rgba(255, 255, 255, 0) 80%
+        );
+        transform: skewX(-20deg);
+        transition: left 0.45s ease;
+      }
+      button.primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 18px 40px rgba(56, 85, 214, 0.18);
+      }
+      button.primary:hover::after {
+        left: 130%;
+      }
+      body.dark button.primary {
+        background: var(--btn-gradient-dark);
+        box-shadow: 0 12px 30px rgba(50, 110, 250, 0.08);
+      }
+
+      .secondary {
+        padding: 10px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .alert-settings {
+        margin-top: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 14px;
+        border-radius: 10px;
+      }
+      body.light .alert-settings {
+        background: #fffdf8;
+      }
+
+      .result {
+        margin-top: 16px;
+        display: none;
+        padding: 12px;
+        border-radius: 10px;
+      }
+      .success {
+        background: #e8f5e8;
+        border: 1px solid #4bb543;
+        color: #163b19;
+      }
+      .error {
+        background: #fff0f0;
+        border: 1px solid #e71d36;
+      }
+
+      .hourly-forecast {
+        margin-top: 16px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+      }
+      body.light .hourly-forecast {
+        background: #f9fbff;
+      }
+      .hourly-items {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 8px 0;
+      }
+
+      .route-section {
+        margin-top: 18px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      body.light .route-section {
+        background: #f0fbff;
+        border-color: #dff1ff;
+      }
+
+      .news-section {
+        margin-top: 18px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      body.light .news-section {
+        background: #fff8f0;
+        border-color: #ffe8cc;
+      }
+
+      .route-weather-item {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 4px solid var(--accent);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+      }
+      body.light .route-weather-item {
+        background: white;
+        box-shadow: 0 8px 20px rgba(50, 60, 90, 0.04);
+        color: var(--text-light);
+      }
+
+      .news-article {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 4px solid #ff6b35;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+      }
+      body.light .news-article {
+        background: white;
+        box-shadow: 0 8px 20px rgba(50, 60, 90, 0.04);
+        color: var(--text-light);
+      }
+
+      .hourly-item {
+        text-align: center;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.03)
+        );
+        padding: 8px 10px;
+        border-radius: 8px;
+        min-width: 78px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+      }
+
+      .news-title {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: inherit;
+        font-size: 15px;
+      }
+      .news-description {
+        color: inherit;
+        margin-bottom: 8px;
+        line-height: 1.4;
+        opacity: 0.85;
+        font-size: 14px;
+      }
+      .news-meta {
+        font-size: 12px;
+        opacity: 0.7;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .news-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 13px;
+      }
+      .dark .news-link {
+        color: var(--accent-dark);
+      }
+      .news-link:hover {
+        text-decoration: underline;
+      }
+
+      /* mode toggle fixed top-right */
+      .mode-toggle {
+        position: fixed;
+        top: 18px;
+        right: 20px;
+        z-index: var(--ui-z);
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 999px;
+        padding: 6px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        transition: background 0.25s ease;
+      }
+      body.dark .mode-toggle {
+        background: rgba(10, 12, 20, 0.68);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+        color: var(--text-dark);
+      }
+      .mode-toggle button {
+        border: 0;
+        background: transparent;
+        font-size: 18px;
+        padding: 8px;
+        border-radius: 999px;
+        cursor: pointer;
+        color: inherit;
+      }
+      .mode-toggle button.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      @media (max-width: 1100px) {
+        :root {
+          --card-w: 92vw;
+        }
+        .page {
+          padding: 28px;
+        }
+        .mode-toggle {
+          top: 10px;
+          right: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body class="light">
+    <!-- professional overlay & rain layer -->
+    <div class="overlay" aria-hidden="true"></div>
+    <div
+      id="rainLayer"
+      style="
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 25;
+        display: none;
+      "
+    ></div>
+
+    <!-- top-right mode toggle -->
+    <div
+      class="mode-toggle"
+      id="modeToggle"
+      title="Toggle light / dark"
+      aria-hidden="false"
+    >
+      <button id="lightBtnWeather" aria-label="Light mode">☀️</button>
+      <button id="darkBtnWeather" aria-label="Dark mode">🌙</button>
+    </div>
+
+    <div class="page">
+      <div class="container" role="main" aria-labelledby="pageTitle">
+        <div class="header">
+          <div class="logo">🌤️ WeatherIQ</div>
+          <div class="user-info" aria-live="polite">
+            Welcome! <span id="user-phone"></span>
+            <button class="logout-btn" onclick="logout()" aria-label="Logout">
+              Logout
+            </button>
+          </div>
+        </div>
+
+        <h2 id="pageTitle">Weather Alerts</h2>
+
+        <div class="form-group">
+          <label for="location">Location</label>
+          <input
+            type="text"
+            id="location"
+            placeholder="Mumbai, Delhi, etc."
+            required
+          />
+        </div>
+
+        <div class="alert-settings" aria-labelledby="alertSettingsTitle">
+          <h3 id="alertSettingsTitle" style="margin: 6px 0 10px 0">
+            Alert Settings
+          </h3>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <div style="flex: 2">
+              <input
+                type="number"
+                id="alert-interval"
+                min="1"
+                value="10"
+                aria-label="Alert interval"
+              />
+            </div>
+            <div style="flex: 1">
+              <select id="interval-unit" aria-label="Interval unit">
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+              </select>
+            </div>
+          </div>
+
+          <div
+            id="active-alert-container"
+            style="display: none; margin-top: 12px"
+          >
+            <div
+              class="active-alert"
+              style="background: #e8f5e8; padding: 10px; border-radius: 8px"
+            >
+              <strong>Active Alerts:</strong>
+              <span id="current-interval-display">10 minutes</span> for
+              <span id="current-location-display">Location</span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px">
+              <button
+                class="secondary"
+                style="background: #6c757d; color: white; flex: 1"
+                onclick="updateAlertSchedule()"
+              >
+                Change Interval
+              </button>
+              <button
+                class="secondary"
+                style="background: #e71d36; color: white; flex: 1"
+                onclick="cancelAlerts()"
+              >
+                Stop Alerts
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="primary"
+          onclick="getWeatherAndNews()"
+          id="get-weather-btn"
+        >
+          Get Weather & News
+        </button>
+        <button
+          class="secondary"
+          style="
+            background: #6c757d;
+            color: #fff;
+            display: none;
+            margin-top: 10px;
+          "
+          onclick="updateAlertSchedule()"
+          id="update-alert-btn"
+        >
+          Update Interval Only
+        </button>
+
+        <div id="result" class="result" role="status" aria-live="polite"></div>
+        <div
+          id="loading"
+          class="loading"
+          style="display: none; margin-top: 10px"
+        >
+          Loading...
+        </div>
+
+        <!-- route section -->
+        <div class="route-section" aria-labelledby="routeTitle">
+          <h3 id="routeTitle" style="margin: 6px 0 10px 0">
+            🚗 Route Weather Prediction
+          </h3>
+          <div class="route-points">
+            <div class="form-group route-point">
+              <label for="source-location">Source Location</label>
+              <input
+                type="text"
+                id="source-location"
+                placeholder="Starting point"
+              />
+            </div>
+            <div class="form-group route-point">
+              <label for="destination-location">Destination Location</label>
+              <input
+                type="text"
+                id="destination-location"
+                placeholder="Destination"
+              />
+            </div>
+          </div>
+          <button
+            class="primary"
+            onclick="getRouteWeather()"
+            style="background: linear-gradient(90deg, #7b5cff, #8a2be2)"
+          >
+            Get Route Weather
+          </button>
+        </div>
+
+        <div
+          id="route-result"
+          class="result"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <!-- UPDATED: Weather News Section - Simplified -->
+        <div class="news-section" aria-labelledby="newsTitle">
+          <h3 id="newsTitle" style="margin: 6px 0 10px 0">
+            📰 India Weather News
+          </h3>
+          <p style="margin-bottom: 15px; opacity: 0.8; font-size: 14px;">
+            Get the latest weather news and updates from across India
+          </p>
+          <button
+            class="primary"
+            onclick="getWeatherNews()"
+            style="
+              background: linear-gradient(90deg, #ff6b35, #ff8c42);
+            "
+          >
+            Get India Weather News
+          </button>
+          <div
+            id="news-result"
+            class="result"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= FIXED Backend Code ================= -->
+    <script>
+      const API_URL =
+        "https://xjusfbs1qa.execute-api.ap-south-1.amazonaws.com/prod/weather";
+
+      let currentUser = null;
+      let isAlertActive = false;
+      let currentLocation = "";
+      let currentInterval = 10;
+      let currentUnit = "minutes";
+
+      // Check authentication on page load
+      document.addEventListener("DOMContentLoaded", function () {
+        const storedUser = localStorage.getItem("currentUser");
+        if (!storedUser) {
+          window.location.href = "index.html";
+          return;
+        }
+
+        currentUser = JSON.parse(storedUser);
+        document.getElementById("user-phone").textContent = currentUser.phone;
+        updateAlertUI();
+      });
+
+      function showLoading(show) {
+        document.getElementById("loading").style.display = show
+          ? "block"
+          : "none";
+      }
+
+      function showResult(message, isError = false) {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = message;
+        resultDiv.className = "result " + (isError ? "error" : "success");
+        resultDiv.style.display = "block";
+      }
+
+      function showRouteResult(message, isError = false) {
+        const resultDiv = document.getElementById("route-result");
+        resultDiv.innerHTML = message;
+        resultDiv.className = "result " + (isError ? "error" : "success");
+        resultDiv.style.display = "block";
+      }
+
+      function showNewsResult(message, isError = false) {
+        const resultDiv = document.getElementById("news-result");
+        resultDiv.innerHTML = message;
+        resultDiv.className = "result " + (isError ? "error" : "success");
+        resultDiv.style.display = "block";
+      }
+
+      function updateAlertUI() {
+        const interval = parseInt(
+          document.getElementById("alert-interval").value
+        );
+        const unit = document.getElementById("interval-unit").value;
+
+        if (isAlertActive) {
+          document.getElementById("active-alert-container").style.display =
+            "block";
+          document.getElementById(
+            "current-interval-display"
+          ).textContent = `${interval} ${
+            unit === "minutes"
+              ? "minute" + (interval !== 1 ? "s" : "")
+              : "hour" + (interval !== 1 ? "s" : "")
+          }`;
+          document.getElementById("current-location-display").textContent =
+            currentLocation;
+          document.getElementById("get-weather-btn").style.display = "none";
+          document.getElementById("update-alert-btn").style.display = "block";
+        } else {
+          document.getElementById("active-alert-container").style.display =
+            "none";
+          document.getElementById("get-weather-btn").style.display = "block";
+          document.getElementById("update-alert-btn").style.display = "none";
+        }
+      }
+
+      function formatTime(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function logout() {
+        localStorage.removeItem("currentUser");
+        window.location.href = "index.html";
+      }
+
+      // UPDATED FUNCTION: Get India Weather News
+      async function getWeatherNews() {
+        showLoading(true);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "get_weather_news",
+              location: "India", // Fixed location for India news
+            }),
+          });
+
+          const data = await response.json();
+          console.log("News response:", data);
+
+          if (response.ok) {
+            displayNewsResults(data);
+          } else {
+            showNewsResult(data.error || "Failed to get weather news", true);
+          }
+        } catch (error) {
+          showNewsResult("Network error: " + error.message, true);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      function displayNewsResults(newsData) {
+        console.log("Displaying news results:", newsData);
+
+        let articles;
+
+        if (newsData.body) {
+          try {
+            articles =
+              typeof newsData.body === "string"
+                ? JSON.parse(newsData.body)
+                : newsData.body;
+          } catch (e) {
+            articles = newsData;
+          }
+        } else {
+          articles = newsData;
+        }
+
+        if (!articles || articles.length === 0) {
+          showNewsResult("No weather news found for India at the moment.", false);
+          return;
+        }
+
+        let resultHTML = `<h4>🌤️ Latest India Weather News</h4>`;
+
+        articles.forEach((article, index) => {
+          const publishedDate = new Date(
+            article.publishedAt
+          ).toLocaleDateString();
+
+          resultHTML += `
+          <div class="news-article">
+            <div class="news-title">${
+              article.title || "No title available"
+            }</div>
+            <div class="news-description">${
+              article.description || "No description available"
+            }</div>
+            <div class="news-meta">
+              <span>📰 ${article.source || "Unknown source"}</span>
+              <span>📅 ${publishedDate}</span>
+            </div>
+            ${
+              article.url && article.url !== "#"
+                ? `<a href="${article.url}" target="_blank" class="news-link">Read full article →</a>`
+                : ""
+            }
+          </div>
+        `;
+        });
+
+        showNewsResult(resultHTML);
+      }
+
+      // Combined function to get weather and news
+      async function getWeatherAndNews() {
+        const location = document.getElementById("location").value.trim();
+        const interval = parseInt(
+          document.getElementById("alert-interval").value
+        );
+        const unit = document.getElementById("interval-unit").value;
+
+        if (!location) {
+          showResult("Please enter a location", true);
+          return;
+        }
+
+        if (!interval || interval < 1) {
+          showResult("Please enter a valid interval", true);
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          // First try to start alerts
+          let alertStarted = false;
+          try {
+            const alertResponse = await fetch(API_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "start_alerts",
+                user_id: currentUser.user_id,
+                location: location,
+                alert_interval: interval,
+                interval_unit: unit,
+              }),
+            });
+
+            const alertData = await alertResponse.json();
+            console.log("Start alerts response:", alertData);
+
+            if (alertResponse.ok) {
+              alertStarted = true;
+              isAlertActive = true;
+              currentLocation = location;
+              currentInterval = interval;
+              currentUnit = unit;
+              updateAlertUI();
+            }
+          } catch (alertError) {
+            console.log("Start alerts failed:", alertError);
+          }
+
+          // Get weather data
+          const weatherResponse = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "get_weather",
+              user_id: currentUser.user_id,
+              location: location,
+            }),
+          });
+
+          const weatherData = await weatherResponse.json();
+          console.log("Weather response:", weatherData);
+
+          if (weatherResponse.ok) {
+            displayWeatherResults(
+              weatherData,
+              location,
+              interval,
+              unit,
+              alertStarted
+            );
+
+            // Then get India weather news
+            setTimeout(() => {
+              getWeatherNews();
+            }, 500);
+          } else {
+            showResult(weatherData.error || "Failed to get weather data", true);
+          }
+        } catch (error) {
+          showResult("Network error: " + error.message, true);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // FIXED FUNCTION: Display Route Weather Results
+      function displayRouteResults(routeData) {
+        console.log("Displaying route results:", routeData);
+
+        let routeWeather;
+
+        if (routeData.body) {
+          try {
+            routeWeather =
+              typeof routeData.body === "string"
+                ? JSON.parse(routeData.body)
+                : routeData.body;
+          } catch (e) {
+            routeWeather = routeData;
+          }
+        } else {
+          routeWeather = routeData;
+        }
+
+        const routeInfo = routeWeather.route_weather;
+
+        let resultHTML = `
+                <h3>🚗 Route: ${routeInfo.source.location} → ${routeInfo.destination.location}</h3>
+                <div class="route-summary">
+                    ${routeInfo.summary} | Distance: ${routeInfo.distance_km} km
+                </div>
+            `;
+
+        // Source weather
+        resultHTML += `
+                <div class="route-weather-item">
+                    <h4>📍 Source: ${routeInfo.source.location}</h4>
+                    <div><strong>Condition:</strong> ${
+                      routeInfo.source.weather.description || "N/A"
+                    }</div>
+                    <div><strong>Temperature:</strong> ${Math.round(
+                      routeInfo.source.weather.temperature || 0
+                    )}°C</div>
+                    <div><strong>Humidity:</strong> ${
+                      routeInfo.source.weather.humidity || "N/A"
+                    }%</div>
+                    ${
+                      routeInfo.source.weather.wind_speed
+                        ? `<div><strong>Wind:</strong> ${routeInfo.source.weather.wind_speed} m/s</div>`
+                        : ""
+                    }
+                </div>
+            `;
+
+        // Handle different route types (short vs long)
+        if (routeInfo.route_type === "long") {
+          // Long route - show 2 midpoints
+          resultHTML += `
+                    <div class="route-weather-item" style="border-left-color: #8a2be2;">
+                        <h4>🟡 Midpoint 1: ${routeInfo.midpoint1.location}</h4>
+                        <div><strong>Condition:</strong> ${
+                          routeInfo.midpoint1.weather.description || "N/A"
+                        }</div>
+                        <div><strong>Temperature:</strong> ${Math.round(
+                          routeInfo.midpoint1.weather.temperature || 0
+                        )}°C</div>
+                        <div><strong>Humidity:</strong> ${
+                          routeInfo.midpoint1.weather.humidity || "N/A"
+                        }%</div>
+                    </div>
+                    
+                    <div class="route-weather-item" style="border-left-color: #ff6b35;">
+                        <h4>🟡 Midpoint 2: ${routeInfo.midpoint2.location}</h4>
+                        <div><strong>Condition:</strong> ${
+                          routeInfo.midpoint2.weather.description || "N/A"
+                        }</div>
+                        <div><strong>Temperature:</strong> ${Math.round(
+                          routeInfo.midpoint2.weather.temperature || 0
+                        )}°C</div>
+                        <div><strong>Humidity:</strong> ${
+                          routeInfo.midpoint2.weather.humidity || "N/A"
+                        }%</div>
+                    </div>
+                `;
+        } else {
+          // Short route - show 1 midpoint
+          resultHTML += `
+                    <div class="route-weather-item" style="border-left-color: #8a2be2;">
+                        <h4>🟡 Midpoint: ${routeInfo.midpoint.location}</h4>
+                        <div><strong>Condition:</strong> ${
+                          routeInfo.midpoint.weather.description || "N/A"
+                        }</div>
+                        <div><strong>Temperature:</strong> ${Math.round(
+                          routeInfo.midpoint.weather.temperature || 0
+                        )}°C</div>
+                        <div><strong>Humidity:</strong> ${
+                          routeInfo.midpoint.weather.humidity || "N/A"
+                        }%</div>
+                    </div>
+                `;
+        }
+
+        // Destination weather
+        resultHTML += `
+                <div class="route-weather-item" style="border-left-color: #28a745;">
+                    <h4>🎯 Destination: ${routeInfo.destination.location}</h4>
+                    <div><strong>Condition:</strong> ${
+                      routeInfo.destination.weather.description || "N/A"
+                    }</div>
+                    <div><strong>Temperature:</strong> ${Math.round(
+                      routeInfo.destination.weather.temperature || 0
+                    )}°C</div>
+                    <div><strong>Humidity:</strong> ${
+                      routeInfo.destination.weather.humidity || "N/A"
+                    }%</div>
+                    ${
+                      routeInfo.destination.weather.wind_speed
+                        ? `<div><strong>Wind:</strong> ${routeInfo.destination.weather.wind_speed} m/s</div>`
+                        : ""
+                    }
+                </div>
+            `;
+
+        showRouteResult(resultHTML);
+      }
+
+      // EXISTING FUNCTIONS
+      async function getWeather() {
+        const location = document.getElementById("location").value.trim();
+        const interval = parseInt(
+          document.getElementById("alert-interval").value
+        );
+        const unit = document.getElementById("interval-unit").value;
+
+        if (!location) {
+          showResult("Please enter a location", true);
+          return;
+        }
+
+        if (!interval || interval < 1) {
+          showResult("Please enter a valid interval", true);
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          // First try to start alerts
+          let alertStarted = false;
+          try {
+            const alertResponse = await fetch(API_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "start_alerts",
+                user_id: currentUser.user_id,
+                location: location,
+                alert_interval: interval,
+                interval_unit: unit,
+              }),
+            });
+
+            const alertData = await alertResponse.json();
+            console.log("Start alerts response:", alertData);
+
+            if (alertResponse.ok) {
+              alertStarted = true;
+              isAlertActive = true;
+              currentLocation = location;
+              currentInterval = interval;
+              currentUnit = unit;
+              updateAlertUI();
+            }
+          } catch (alertError) {
+            console.log("Start alerts failed:", alertError);
+          }
+
+          // Get weather data
+          const weatherResponse = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "get_weather",
+              user_id: currentUser.user_id,
+              location: location,
+            }),
+          });
+
+          const weatherData = await weatherResponse.json();
+          console.log("Weather response:", weatherData);
+
+          if (weatherResponse.ok) {
+            displayWeatherResults(
+              weatherData,
+              location,
+              interval,
+              unit,
+              alertStarted
+            );
+          } else {
+            showResult(weatherData.error || "Failed to get weather data", true);
+          }
+        } catch (error) {
+          showResult("Network error: " + error.message, true);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      function displayWeatherResults(
+        weatherData,
+        location,
+        interval,
+        unit,
+        alertStarted
+      ) {
+        console.log("Displaying weather results:", weatherData);
+
+        let weather, hourly, alertSent, message;
+
+        if (weatherData.body) {
+          try {
+            const body =
+              typeof weatherData.body === "string"
+                ? JSON.parse(weatherData.body)
+                : weatherData.body;
+            weather = body.weather || body;
+            hourly = body.hourly_forecast || [];
+            alertSent = body.alert_sent || false;
+            message = body.message || "";
+          } catch (e) {
+            weather = weatherData.weather || weatherData;
+            hourly = weatherData.hourly_forecast || [];
+            alertSent = weatherData.alert_sent || false;
+            message = weatherData.message || "";
+          }
+        } else {
+          weather = weatherData.weather || weatherData;
+          hourly = weatherData.hourly_forecast || [];
+          alertSent = weatherData.alert_sent || false;
+          message = weatherData.message || "";
+        }
+
+        // ====== UI hook: show/hide rain based on condition (realistic) ======
+        try {
+          const desc =
+            weather && weather.description
+              ? String(weather.description).toLowerCase()
+              : "";
+          // if description contains 'rain' or 'shower' or 'drizzle' consider it raining
+          const isRaining = /rain|shower|drizzle|thunder/i.test(desc);
+          toggleRain(isRaining);
+        } catch (e) {
+          // if anything goes wrong, hide rain
+          toggleRain(false);
+        }
+        // ===================================================================
+
+        let resultHTML = `
+                <h3>📍 ${location}</h3>
+                <div style="background: rgba(255,255,255,0.04); padding: 15px; border-radius: 5px; margin: 10px 0;">
+            `;
+
+        if (weather && typeof weather === "object") {
+          resultHTML += `
+                    <div><strong>Condition:</strong> ${
+                      weather.description || "N/A"
+                    }</div>
+                    <div><strong>Temperature:</strong> ${Math.round(
+                      weather.temperature || 0
+                    )}°C</div>
+                    <div><strong>Humidity:</strong> ${
+                      weather.humidity || "N/A"
+                    }%</div>
+                    ${
+                      weather.wind_speed
+                        ? `<div><strong>Wind:</strong> ${weather.wind_speed} m/s</div>`
+                        : ""
+                    }
+                `;
+        } else {
+          resultHTML += `<div>Weather data unavailable</div>`;
+        }
+
+        resultHTML += `</div>`;
+
+        // Hourly forecast
+        resultHTML += `
+                <div class="hourly-forecast">
+                    <h4>24-Hour Forecast</h4>
+                    <div class="hourly-items">
+            `;
+
+        const baseTemp =
+          weather && weather.temperature ? Math.round(weather.temperature) : 25;
+        const currentTime = Math.floor(Date.now() / 1000);
+
+        for (let i = 0; i < 8; i++) {
+          const hourTime = currentTime + i * 3 * 3600;
+          const hourTemp = baseTemp + Math.round(Math.random() * 6 - 3);
+          resultHTML += `
+                    <div class="hourly-item">
+                        <div style="font-size: 12px;">${formatTime(
+                          hourTime
+                        )}</div>
+                        <div style="font-weight: bold;">${hourTemp}°C</div>
+                        <div style="font-size: 10px;">${
+                          i % 3 === 0 ? "Sunny" : "Clear"
+                        }</div>
+                    </div>
+                `;
+        }
+
+        resultHTML += `</div></div>`;
+
+        // Alert status
+        if (alertStarted) {
+          resultHTML += `
+                    <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        ✅ Alerts activated! You will receive SMS every ${interval} ${unit}
+                    </div>
+                `;
+        } else if (alertSent) {
+          resultHTML += `
+                    <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        ✅ SMS Alert Sent to your phone!
+                    </div>
+                `;
+        } else {
+          resultHTML += `
+                    <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        ℹ️ ${message || "Weather data loaded successfully"}
+                    </div>
+                `;
+        }
+
+        showResult(resultHTML);
+      }
+
+      async function updateAlertSchedule() {
+        const interval = parseInt(
+          document.getElementById("alert-interval").value
+        );
+        const unit = document.getElementById("interval-unit").value;
+
+        if (!interval || interval < 1) {
+          showResult("Please enter a valid interval", true);
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update_alerts",
+              user_id: currentUser.user_id,
+              alert_interval: interval,
+              interval_unit: unit,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            currentInterval = interval;
+            currentUnit = unit;
+            updateAlertUI();
+            showResult(`✅ Alert interval updated to ${interval} ${unit}`);
+          } else {
+            showResult("Alert scheduling not supported by API", false);
+          }
+        } catch (error) {
+          showResult("Alert scheduling not available", false);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      async function cancelAlerts() {
+        showLoading(true);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "stop_alerts",
+              user_id: currentUser.user_id,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            isAlertActive = false;
+            updateAlertUI();
+            showResult("✅ Alerts stopped successfully");
+          } else {
+            showResult("Alert stopping not supported by API", false);
+          }
+        } catch (error) {
+          showResult("Alert stopping not available", false);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // NEW FUNCTION: Get Route Weather
+      async function getRouteWeather() {
+        const source = document.getElementById("source-location").value.trim();
+        const destination = document
+          .getElementById("destination-location")
+          .value.trim();
+
+        if (!source || !destination) {
+          showRouteResult(
+            "Please enter both source and destination locations",
+            true
+          );
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "get_route_weather",
+              source: source,
+              destination: destination,
+            }),
+          });
+
+          const data = await response.json();
+          console.log("Route weather response:", data);
+
+          if (response.ok) {
+            displayRouteResults(data);
+          } else {
+            showRouteResult(
+              data.error || "Failed to get route weather data",
+              true
+            );
+          }
+        } catch (error) {
+          showRouteResult("Network error: " + error.message, true);
+        } finally {
+          showLoading(false);
+        }
+      }
+    </script>
+
+    <!-- ================= UI-only scripts: rain + mode toggle + polish (DO NOT CHANGE BACKEND) ================= -->
+    <script>
+      /* ===== Realistic rain overlay (full-page) ===== */
+      (function () {
+        const rainLayer = document.getElementById("rainLayer");
+
+        // Smooth fade in/out helpers
+        function fadeIn(el, duration = 500) {
+          el.style.display = "block";
+          el.style.opacity = 0;
+          el.style.transition = `opacity ${duration}ms ease`;
+          // force reflow
+          void el.offsetWidth;
+          el.style.opacity = 1;
+        }
+        function fadeOut(el, duration = 500) {
+          el.style.opacity = 1;
+          el.style.transition = `opacity ${duration}ms ease`;
+          // force reflow
+          void el.offsetWidth;
+          el.style.opacity = 0;
+          setTimeout(() => {
+            el.style.display = "none";
+          }, duration);
+        }
+
+        // Create raindrops - layered for depth
+        function generateRain() {
+          // clear if already present
+          rainLayer.innerHTML = "";
+
+          // create 3 layers: light, medium, heavy
+          const layers = [
+            {
+              count: 40,
+              speedMin: 0.9,
+              speedMax: 1.6,
+              opacity: 0.18,
+              width: 1,
+            },
+            {
+              count: 60,
+              speedMin: 0.6,
+              speedMax: 1.3,
+              opacity: 0.26,
+              width: 1.5,
+            },
+            {
+              count: 80,
+              speedMin: 0.4,
+              speedMax: 1.0,
+              opacity: 0.36,
+              width: 2,
+            },
+          ];
+
+          layers.forEach((layer, li) => {
+            const layerWrap = document.createElement("div");
+            layerWrap.style.position = "absolute";
+            layerWrap.style.inset = "0";
+            layerWrap.style.overflow = "hidden";
+            layerWrap.style.pointerEvents = "none";
+            layerWrap.style.mixBlendMode = "screen";
+            rainLayer.appendChild(layerWrap);
+
+            for (let i = 0; i < layer.count; i++) {
+              const drop = document.createElement("div");
+              // styling
+              drop.style.position = "absolute";
+              drop.style.left = Math.random() * 110 + "vw";
+              drop.style.top = Math.random() * -100 + "vh";
+              drop.style.width = layer.width + Math.random() * 1.2 + "px";
+              drop.style.height = 18 + Math.random() * 28 + "px";
+              drop.style.background = `linear-gradient(180deg, rgba(255,255,255,${layer.opacity}) 0%, rgba(255,255,255,0.05) 100%)`;
+              drop.style.transform = "skewX(-15deg)";
+              drop.style.borderRadius = "50%";
+              drop.style.opacity = (0.4 + Math.random() * 0.6).toString();
+              // animation
+              const dur = (
+                layer.speedMin +
+                Math.random() * (layer.speedMax - layer.speedMin)
+              ).toFixed(2);
+              drop.style.animation = `rainFall ${dur}s linear ${
+                Math.random() * -5
+              }s infinite`;
+              layerWrap.appendChild(drop);
+            }
+          });
+        }
+
+        // attach keyframes dynamically (so durations are used)
+        const styleTag = document.createElement("style");
+        styleTag.innerHTML = `
+        @keyframes rainFall {
+          0% { transform: translate3d(0,-10vh,0) skewX(-15deg); opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translate3d(-6vw, 120vh, 0) skewX(-15deg); opacity: 0; }
+        }
+      `;
+        document.head.appendChild(styleTag);
+
+        // exported toggleRain function (global)
+        window.toggleRain = function (show) {
+          if (show) {
+            if (!rainLayer.hasChildNodes()) generateRain();
+            fadeIn(rainLayer, 600);
+          } else {
+            fadeOut(rainLayer, 600);
+          }
+        };
+
+        // ensure hidden by default
+        rainLayer.style.display = "none";
+        rainLayer.style.opacity = 0;
+      })();
+
+      /* ===== Mode toggle (keeps user preference) ===== */
+      (function () {
+        const saved = localStorage.getItem("wg_mode");
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const startMode = saved || (prefersDark ? "dark" : "light");
+
+        const lightBtn = document.getElementById("lightBtnWeather");
+        const darkBtn = document.getElementById("darkBtnWeather");
+
+        function applyMode(m) {
+          if (m === "dark") {
+            document.documentElement.classList.add("dark");
+            document.body.className = "dark";
+            darkBtn.classList.add("active");
+            lightBtn.classList.remove("active");
+          } else {
+            document.documentElement.classList.remove("dark");
+            document.body.className = "light";
+            lightBtn.classList.add("active");
+            darkBtn.classList.remove("active");
+          }
+        }
+
+        applyMode(startMode);
+        lightBtn.addEventListener("click", () => {
+          localStorage.setItem("wg_mode", "light");
+          applyMode("light");
+        });
+        darkBtn.addEventListener("click", () => {
+          localStorage.setItem("wg_mode", "dark");
+          applyMode("dark");
+        });
+      })();
+
+      /* ===== Respect reduced motion (stop heavy animations) ===== */
+      (function () {
+        if (
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ) {
+          // hide rain and long animations if user prefers reduced motion
+          const rain = document.getElementById("rainLayer");
+          if (rain) rain.style.display = "none";
+        }
+      })();
+    </script>
+  </body>
+</html>
