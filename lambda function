@@ -1,0 +1,812 @@
+import json
+import boto3
+import urllib.request
+import urllib.parse
+import time
+from datetime import datetime, timedelta
+import math
+import base64
+import uuid
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('WeatherUsers')
+
+def lambda_handler(event, context):
+    print("Received event:", json.dumps(event))
+    
+    # CORS headers
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'OPTIONS,POST',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+    }
+    
+    try:
+        # Extract data from request
+        if 'body' in event:
+            body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
+        else:
+            body = event
+            
+        action = body.get('action')
+        user_id = body.get('user_id')
+        phone_number = body.get('phone_number')
+        location = body.get('location')
+        alert_interval = body.get('alert_interval', 10)
+        interval_unit = body.get('interval_unit', 'minutes')
+        password = body.get('password')
+        source = body.get('source')
+        destination = body.get('destination')
+        
+        print(f"Action: {action}, User ID: {user_id}")
+
+        if action == 'register':
+            # Generate user_id if not provided
+            if not user_id:
+                user_id = generate_user_id()
+                print(f"Generated user_id: {user_id}")
+            response = register_user(user_id, phone_number, password)
+        elif action == 'login':
+            response = login_user(phone_number, password)
+        elif action == 'get_weather':
+            response = get_weather_data_only(user_id, location)
+        elif action == 'start_alerts':
+            response = start_scheduled_alerts(user_id, location, alert_interval, interval_unit)
+        elif action == 'stop_alerts':
+            response = stop_scheduled_alerts(user_id)
+        elif action == 'update_alerts':
+            response = update_alert_schedule(user_id, alert_interval, interval_unit)
+        elif action == 'check_alerts':
+            response = check_and_send_alerts()
+        elif action == 'get_route_weather':
+            response = get_route_weather(source, destination)
+        elif action == 'get_weather_news':
+            response = get_weather_news(location)
+        else:
+            response = {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid action'})
+            }
+        
+        # Add headers to response
+        response['headers'] = headers
+        return response
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def generate_user_id():
+    """Generate a unique user ID"""
+    return "user_" + str(uuid.uuid4())[:8]
+
+def get_weather_news(location):
+    """Get weather-related news using GNews API"""
+    try:
+        api_key = "419731d162ae97a9d320e2f2906dbaef"
+        city_name = location.split(',')[0].strip()
+        
+        # Simple query - just get general weather news
+        news_url = f"https://gnews.io/api/v4/search?q=weather&lang=en&max=5&apikey={api_key}"
+        
+        print(f"🔍 DEBUG: Fetching from URL: {news_url}")
+        
+        req = urllib.request.Request(news_url)
+        response = urllib.request.urlopen(req, timeout=10)
+        news_data = json.loads(response.read().decode())
+        
+        print(f"🔍 DEBUG: API Response: {json.dumps(news_data)}")
+        
+        if news_data.get('articles'):
+            articles = []
+            for article in news_data['articles'][:5]:
+                articles.append({
+                    'title': article.get('title', ''),
+                    'description': article.get('description', ''),
+                    'url': article.get('url', ''),
+                    'publishedAt': article.get('publishedAt', ''),
+                    'source': article.get('source', {}).get('name', 'Unknown')
+                })
+            
+            print(f"✅ DEBUG: Success! Found {len(articles)} articles")
+            return {
+                'statusCode': 200,
+                'body': json.dumps(articles)
+            }
+        else:
+            print("❌ DEBUG: No articles in response")
+            return {
+                'statusCode': 200,
+                'body': json.dumps(get_mock_news(location))
+            }
+            
+    except Exception as e:
+        print(f"❌ DEBUG: Error: {str(e)}")
+        return {
+            'statusCode': 200,
+            'body': json.dumps(get_mock_news(location))
+        }
+
+def get_mock_news(location):
+    return [
+        {
+            'title': f'Weather News for {location}',
+            'description': 'Latest weather updates and forecasts',
+            'url': '#',
+            'publishedAt': datetime.now().isoformat() + 'Z',
+            'source': 'WeatherGuard'
+        }
+    ]
+
+def register_user(user_id, phone_number, password):
+    try:
+        print(f"🔧 DEBUG: Starting registration for {phone_number}")
+        print(f"🔧 DEBUG: User ID: {user_id}")
+        
+        # Validate and format phone number
+        formatted_phone = validate_phone_number(phone_number)
+        print(f"🔧 DEBUG: Formatted phone: {formatted_phone}")
+        
+        # Validate that user_id is provided and is a string
+        if not user_id or not isinstance(user_id, str):
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid user ID'})
+            }
+        
+        # Check if user already exists
+        print(f"🔧 DEBUG: Checking existing user...")
+        existing_user = table.scan(
+            FilterExpression='phone_number = :phone',
+            ExpressionAttributeValues={':phone': formatted_phone}
+        )
+        
+        print(f"🔧 DEBUG: Existing user scan result: {existing_user}")
+        
+        if existing_user.get('Items'):
+            print(f"🔧 DEBUG: User already exists")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Phone number already registered'})
+            }
+        
+        # Store user in DynamoDB
+        print(f"🔧 DEBUG: Storing user in DynamoDB...")
+        table.put_item(
+            Item={
+                'user_id': user_id,  # This must be a string
+                'phone_number': formatted_phone,
+                'password': password,
+                'location': '',
+                'alerts_active': False,
+                'alert_interval': 10,
+                'last_alert_sent': '0',
+                'next_alert_time': '0',
+                'created_at': str(int(time.time()))
+            }
+        )
+        print(f"🔧 DEBUG: User stored successfully")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'User registered successfully',
+                'user_id': user_id  # Return the user_id to frontend
+            })
+        }
+    except Exception as e:
+        print(f"❌ REGISTRATION ERROR: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Registration failed: {str(e)}'})
+        }
+
+def login_user(phone_number, password):
+    try:
+        print(f"🔧 DEBUG: Login attempt for {phone_number}")
+        
+        # Validate and format phone number
+        formatted_phone = validate_phone_number(phone_number)
+        print(f"🔧 DEBUG: Formatted phone: {formatted_phone}")
+        
+        # Scan DynamoDB for user
+        print(f"🔧 DEBUG: Scanning DynamoDB...")
+        response = table.scan(
+            FilterExpression='phone_number = :phone AND password = :pwd',
+            ExpressionAttributeValues={
+                ':phone': formatted_phone,
+                ':pwd': password
+            }
+        )
+        
+        users = response.get('Items', [])
+        print(f"🔧 DEBUG: Found {len(users)} matching users")
+        print(f"🔧 DEBUG: Users data: {users}")
+        
+        if users:
+            user = users[0]
+            print(f"🔧 DEBUG: Login successful for user: {user['user_id']}")
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'message': 'Login successful',
+                    'user_id': user['user_id'],
+                    'phone_number': user['phone_number']
+                })
+            }
+        else:
+            print(f"🔧 DEBUG: No matching user found")
+            return {
+                'statusCode': 401,
+                'body': json.dumps({'error': 'Invalid phone number or password'})
+            }
+            
+    except Exception as e:
+        print(f"❌ LOGIN ERROR: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Login failed: {str(e)}'})
+        }
+
+def get_weather_data_only(user_id, location):
+    """Get weather data without sending SMS"""
+    try:
+        # Get user details (optional - for tracking)
+        try:
+            response = table.get_item(Key={'user_id': user_id})
+            user = response.get('Item', {})
+            print(f"User lookup: {user}")
+        except:
+            print("User not found, but continuing with weather data")
+        
+        # Get weather data
+        weather_data = get_weather_data(location)
+        print(f"Weather data for {location}: {weather_data}")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'weather': weather_data,
+                'hourly_forecast': weather_data.get('hourly_forecast', []),
+                'alert_sent': False,
+                'message': 'Weather data retrieved successfully'
+            })
+        }
+    except Exception as e:
+        print(f"Weather fetch error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Weather fetch failed: {str(e)}'})
+        }
+
+def start_scheduled_alerts(user_id, location, alert_interval, interval_unit):
+    try:
+        # Convert to minutes
+        if interval_unit == 'hours':
+            interval_minutes = alert_interval * 60
+        else:
+            interval_minutes = alert_interval
+        
+        current_time = int(time.time())
+        next_alert_time = current_time + (interval_minutes * 60)
+        
+        # Update user with alert settings
+        table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET #loc = :loc, alerts_active = :active, alert_interval = :interval, last_alert_sent = :last, next_alert_time = :next',
+            ExpressionAttributeNames={'#loc': 'location'},
+            ExpressionAttributeValues={
+                ':loc': location,
+                ':active': True,
+                ':interval': interval_minutes,
+                ':last': str(current_time),
+                ':next': str(next_alert_time)
+            }
+        )
+        
+        # Get user phone number and send immediate alert
+        response = table.get_item(Key={'user_id': user_id})
+        user = response.get('Item', {})
+        phone_number = user.get('phone_number')
+        
+        if phone_number:
+            # Get weather data and send first alert
+            weather_data = get_weather_data(location)
+            alert_sent = send_twilio_sms(phone_number, location, weather_data)
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'message': f'Alerts started! Weather updates every {alert_interval} {interval_unit}',
+                    'alerts_active': True,
+                    'interval_minutes': interval_minutes,
+                    'first_alert_sent': alert_sent,
+                    'current_weather': weather_data
+                })
+            }
+        else:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'message': f'Alerts started! Weather updates every {alert_interval} {interval_unit}',
+                    'alerts_active': True,
+                    'interval_minutes': interval_minutes,
+                    'first_alert_sent': False,
+                    'note': 'Phone number not found for immediate alert'
+                })
+            }
+            
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Failed to start alerts: {str(e)}'})
+        }
+
+def stop_scheduled_alerts(user_id):
+    try:
+        table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET alerts_active = :active',
+            ExpressionAttributeValues={':active': False}
+        )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Alerts stopped successfully'})
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Failed to stop alerts: {str(e)}'})
+        }
+
+def update_alert_schedule(user_id, alert_interval, interval_unit):
+    try:
+        # Convert to minutes
+        if interval_unit == 'hours':
+            interval_minutes = alert_interval * 60
+        else:
+            interval_minutes = alert_interval
+        
+        current_time = int(time.time())
+        next_alert_time = current_time + (interval_minutes * 60)
+        
+        table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET alert_interval = :interval, next_alert_time = :next',
+            ExpressionAttributeValues={
+                ':interval': interval_minutes,
+                ':next': str(next_alert_time)
+            }
+        )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': f'Alert schedule updated to every {alert_interval} {interval_unit}'
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Failed to update alerts: {str(e)}'})
+        }
+
+def check_and_send_alerts():
+    """This function will be called by CloudWatch Events every minute"""
+    try:
+        current_time = int(time.time())
+        print(f"🔔 Checking alerts at {datetime.fromtimestamp(current_time)}")
+        
+        # Scan for users with active alerts and due for next alert
+        response = table.scan(
+            FilterExpression='alerts_active = :active AND next_alert_time <= :current',
+            ExpressionAttributeValues={
+                ':active': True,
+                ':current': str(current_time)
+            }
+        )
+        
+        users = response.get('Items', [])
+        print(f"👥 Found {len(users)} users due for alerts")
+        
+        results = []
+        for user in users:
+            try:
+                user_id = user['user_id']
+                phone_number = user['phone_number']
+                location = user.get('location', '')
+                alert_interval = int(user.get('alert_interval', 10))
+                
+                print(f"🔔 Processing alert for user {user_id} at {location}")
+                
+                if location and phone_number:
+                    # Get weather data
+                    weather_data = get_weather_data(location)
+                    print(f"🌤️ Weather data retrieved for {location}")
+                    
+                    # ✅ SEND SMS ALERT via Twilio
+                    sms_sent = send_twilio_sms(phone_number, location, weather_data)
+                    
+                    # Update next alert time
+                    next_alert_time = current_time + (alert_interval * 60)
+                    table.update_item(
+                        Key={'user_id': user_id},
+                        UpdateExpression='SET last_alert_sent = :last, next_alert_time = :next',
+                        ExpressionAttributeValues={
+                            ':last': str(current_time),
+                            ':next': str(next_alert_time)
+                        }
+                    )
+                    
+                    results.append({
+                        'user_id': user_id,
+                        'phone_number': phone_number,
+                        'location': location,
+                        'status': 'success',
+                        'sms_sent': sms_sent,
+                        'message': f'Alert sent to {phone_number} for {location}',
+                        'weather': weather_data
+                    })
+                    print(f"✅ Alert processed for user {user_id}")
+                else:
+                    print(f"⚠️ Missing location or phone for user {user_id}")
+                
+            except Exception as e:
+                error_msg = f"User {user.get('user_id', 'unknown')} error: {str(e)}"
+                print(f"❌ {error_msg}")
+                results.append({
+                    'user_id': user.get('user_id', 'unknown'),
+                    'status': 'error',
+                    'message': error_msg
+                })
+        
+        print(f"📊 Alert check completed. Processed: {len(users)}, Results: {results}")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'checked_at': current_time,
+                'users_processed': len(users),
+                'results': results
+            })
+        }
+        
+    except Exception as e:
+        error_msg = f"Error in check_and_send_alerts: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': error_msg})
+        }
+
+def get_route_weather(source, destination):
+    try:
+        # Get coordinates for source and destination
+        source_coords = get_coordinates(source)
+        dest_coords = get_coordinates(destination)
+        
+        if not source_coords or not dest_coords:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Could not find coordinates for locations'})
+            }
+        
+        # Calculate distance
+        distance = calculate_distance(source_coords, dest_coords)
+        
+        if distance > 600:  # Long route - show 2 midpoints
+            midpoint1 = calculate_midpoint(source_coords, dest_coords, 0.33)
+            midpoint2 = calculate_midpoint(source_coords, dest_coords, 0.66)
+            
+            midpoint1_city = find_nearest_city(midpoint1)
+            midpoint2_city = find_nearest_city(midpoint2)
+            
+            # Get weather for all points
+            source_weather = get_weather_data(source)
+            midpoint1_weather = get_weather_data(midpoint1_city)
+            midpoint2_weather = get_weather_data(midpoint2_city)
+            dest_weather = get_weather_data(destination)
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'route_weather': {
+                        'source': {'location': source, 'weather': source_weather},
+                        'midpoint1': {'location': midpoint1_city, 'weather': midpoint1_weather},
+                        'midpoint2': {'location': midpoint2_city, 'weather': midpoint2_weather},
+                        'destination': {'location': destination, 'weather': dest_weather},
+                        'summary': generate_route_summary(source_weather, dest_weather),
+                        'distance_km': round(distance),
+                        'route_type': 'long'
+                    }
+                })
+            }
+        else:  # Short route - show 1 midpoint
+            midpoint = calculate_midpoint(source_coords, dest_coords, 0.5)
+            midpoint_city = find_nearest_city(midpoint)
+            
+            # Get weather for all points
+            source_weather = get_weather_data(source)
+            midpoint_weather = get_weather_data(midpoint_city)
+            dest_weather = get_weather_data(destination)
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'route_weather': {
+                        'source': {'location': source, 'weather': source_weather},
+                        'midpoint': {'location': midpoint_city, 'weather': midpoint_weather},
+                        'destination': {'location': destination, 'weather': dest_weather},
+                        'summary': generate_route_summary(source_weather, dest_weather),
+                        'distance_km': round(distance),
+                        'route_type': 'short'
+                    }
+                })
+            }
+            
+    except Exception as e:
+        print(f"Route weather error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Route weather failed: {str(e)}'})
+        }
+
+def get_coordinates(location_name):
+    """Get coordinates for a location name"""
+    try:
+        api_key = "08f96f2aeb629fab5f1eef9d871fbe97"
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={urllib.parse.quote(location_name)}&appid={api_key}"
+        geo_response = urllib.request.urlopen(geo_url, timeout=10)
+        geo_data = json.loads(geo_response.read().decode())
+        
+        if geo_data:
+            return (geo_data[0]['lat'], geo_data[0]['lon'])
+        return None
+    except:
+        return None
+
+def calculate_distance(coord1, coord2):
+    """Calculate distance between two coordinates in km"""
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
+    
+    # Haversine formula
+    R = 6371  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+def calculate_midpoint(coord1, coord2, ratio=0.5):
+    """Calculate midpoint between two coordinates"""
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
+    
+    mid_lat = lat1 + (lat2 - lat1) * ratio
+    mid_lon = lon1 + (lon2 - lon1) * ratio
+    
+    return (mid_lat, mid_lon)
+
+def find_nearest_city(coord):
+    """Find nearest major city to coordinates"""
+    try:
+        api_key = "08f96f2aeb629fab5f1eef9d871fbe97"
+        # Use reverse geocoding to find nearest city
+        reverse_url = f"http://api.openweathermap.org/geo/1.0/reverse?lat={coord[0]}&lon={coord[1]}&limit=1&appid={api_key}"
+        reverse_response = urllib.request.urlopen(reverse_url, timeout=10)
+        reverse_data = json.loads(reverse_response.read().decode())
+        
+        if reverse_data:
+            return reverse_data[0]['name']
+        else:
+            return f"Near ({coord[0]:.2f}, {coord[1]:.2f})"
+    except:
+        return f"Near ({coord[0]:.2f}, {coord[1]:.2f})"
+
+def generate_route_summary(source_weather, destination_weather):
+    """Generate a simple summary of the route conditions"""
+    source_temp = source_weather.get('temperature', 0)
+    dest_temp = destination_weather.get('temperature', 0)
+    
+    temp_diff = dest_temp - source_temp
+    conditions = []
+    
+    if abs(temp_diff) > 5:
+        if temp_diff > 0:
+            conditions.append(f"Warmer at destination (+{abs(temp_diff):.1f}°C)")
+        else:
+            conditions.append(f"Cooler at destination (-{abs(temp_diff):.1f}°C)")
+    
+    if 'rain' in source_weather.get('description', '') or 'rain' in destination_weather.get('description', ''):
+        conditions.append("Rain possible along route")
+    
+    if not conditions:
+        conditions.append("Stable conditions expected")
+    
+    return " | ".join(conditions)
+
+def get_weather_data(location):
+    try:
+        api_key = "08f96f2aeb629fab5f1eef9d871fbe97"
+        
+        # Get coordinates first
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={urllib.parse.quote(location)}&appid={api_key}"
+        geo_response = urllib.request.urlopen(geo_url, timeout=10)
+        geo_data = json.loads(geo_response.read().decode())
+        
+        if not geo_data:
+            return get_realistic_mock_data(location)
+            
+        lat = geo_data[0]['lat']
+        lon = geo_data[0]['lon']
+        
+        # Get current weather
+        current_url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+        current_response = urllib.request.urlopen(current_url, timeout=10)
+        current_data = json.loads(current_response.read().decode())
+        
+        # Get forecast data
+        forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+        forecast_response = urllib.request.urlopen(forecast_url, timeout=10)
+        forecast_data = json.loads(forecast_response.read().decode())
+        
+        # Process hourly forecast (next 24 hours)
+        hourly_forecast = []
+        for i, item in enumerate(forecast_data['list'][:8]):
+            hourly_forecast.append({
+                'dt': item['dt'],
+                'temp': item['main']['temp'],
+                'description': item['weather'][0]['description'],
+                'humidity': item['main']['humidity']
+            })
+        
+        return {
+            'temperature': current_data['main']['temp'],
+            'description': current_data['weather'][0]['description'],
+            'humidity': current_data['main']['humidity'],
+            'wind_speed': current_data['wind']['speed'],
+            'hourly_forecast': hourly_forecast,
+            'real_data': True
+        }
+        
+    except Exception as e:
+        print(f"Weather API error: {str(e)}")
+        return get_realistic_mock_data(location)
+
+def send_twilio_sms(phone_number, location, weather_data):
+    """Send SMS via Twilio"""
+    try:
+        # Twilio credentials
+        account_sid = "xxxx"
+        auth_token = "yyy"
+        twilio_number = "+111111"
+        
+        print(f"📱 Attempting to send SMS to {phone_number} via Twilio")
+        
+        # Generate alert message
+        message = generate_weather_alert(weather_data, location)
+        
+        # Create the Twilio API URL
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+        
+        # Prepare the data
+        data = urllib.parse.urlencode({
+            'To': phone_number,
+            'From': twilio_number,
+            'Body': message
+        }).encode()
+        
+        # Create the request with Basic Auth
+        req = urllib.request.Request(url, data=data, method='POST')
+        
+        # Add Basic Authentication header
+        credentials = base64.b64encode(f"{account_sid}:{auth_token}".encode()).decode()
+        req.add_header('Authorization', f'Basic {credentials}')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        
+        # Send the request
+        response = urllib.request.urlopen(req)
+        result = json.loads(response.read().decode())
+        
+        print(f"📤 Twilio Response: {result}")
+        
+        if result.get('status') in ['queued', 'sent', 'delivered']:
+            print("✅ Twilio SMS sent successfully!")
+            return True
+        else:
+            error_msg = result.get('error_message', 'Unknown error')
+            print(f"❌ Twilio failed: {error_msg}")
+            return False
+            
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        print(f"❌ Twilio HTTP Error {e.code}: {e.reason}")
+        print(f"🔍 Error details: {error_body}")
+        return False
+    except Exception as e:
+        print(f"💥 Twilio error: {e}")
+        return False
+
+def generate_weather_alert(weather_data, location):
+    """Generate weather alert message"""
+    temperature = weather_data.get('temperature', 0)
+    description = weather_data.get('description', '')
+    humidity = weather_data.get('humidity', 'N/A')
+    wind_speed = weather_data.get('wind_speed', 'N/A')
+    
+    # Base message
+    message = f"Weather Alert for {location}:\n"
+    message += f"Current: {description.title()}, {temperature}°C\n"
+    message += f"Humidity: {humidity}%, Wind: {wind_speed} m/s\n"
+    
+    # Add alerts based on conditions
+    alerts = []
+    if 'rain' in description.lower():
+        alerts.append("🌧️ Rain expected - Carry an umbrella")
+    elif 'storm' in description.lower():
+        alerts.append("⚡ Storm warning - Stay indoors")
+    elif temperature > 35:
+        alerts.append("🔥 Hot day - Stay hydrated")
+    elif temperature < 10:
+        alerts.append("❄️ Chilly weather - Wear warm clothes")
+    
+    if alerts:
+        message += "Alerts: " + " | ".join(alerts)
+    else:
+        message += "✅ Conditions are normal"
+    
+    return message
+
+def get_realistic_mock_data(location):
+    """Fallback data with mock hourly forecast"""
+    import random
+    location_lower = location.lower()
+    
+    base_temp = 25
+    if 'mumbai' in location_lower:
+        base_temp = 28
+    elif 'delhi' in location_lower:
+        base_temp = 22
+    elif 'bangalore' in location_lower:
+        base_temp = 24
+    
+    # Generate mock hourly forecast
+    hourly_forecast = []
+    current_time = int(time.time())
+    
+    for i in range(8):
+        hourly_forecast.append({
+            'dt': current_time + (i * 3 * 3600),
+            'temp': base_temp + random.uniform(-3, 3),
+            'description': 'partly cloudy',
+            'humidity': 60 + random.randint(-10, 10)
+        })
+    
+    return {
+        'temperature': base_temp,
+        'description': 'partly cloudy',
+        'humidity': 65,
+        'wind_speed': 3.5,
+        'hourly_forecast': hourly_forecast,
+        'real_data': False
+    }
+
+def validate_phone_number(phone):
+    cleaned = ''.join(filter(str.isdigit, phone))
+    
+    if cleaned.startswith('91') and len(cleaned) == 12:
+        return '+' + cleaned
+    elif cleaned.startswith('91') and len(cleaned) == 11:
+        return '+91' + cleaned[2:]
+    elif len(cleaned) == 10:
+        return '+91' + cleaned
+    elif cleaned.startswith('+91') and len(cleaned) == 13:
+        return cleaned
+    else:
+        return phone
